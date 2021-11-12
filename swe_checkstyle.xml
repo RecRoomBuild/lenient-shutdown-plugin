@@ -123,7 +123,9 @@
                 <property name="severity" value="warning"/>
         </module>
     </module>
-    <module name="NewlineAtEndOfFile"/>
+    <module name="NewlineAtEndOfFile">
+        <property name="lineSeparator" value="lf" />
+    </module>
     <module name="Translation"/>
     <!-- Ignore generated code -->
     <module name="SuppressionCommentFilter">
