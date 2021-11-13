@@ -52,6 +52,8 @@ public class ShutdownConfiguration extends GlobalConfiguration {
 
     private boolean allowAllQueuedItems;
 
+    private boolean allowAllDownstreamItems;
+
     private boolean allowWhiteListedProjects;
 
     /**
@@ -69,10 +71,20 @@ public class ShutdownConfiguration extends GlobalConfiguration {
     /**
      * Checks if all queued items are allowed to build in lenient shutdown mode.
      *
-     * @return true if all queued itmes will build, false otherwise
+     * @return true if all queued items will build, false otherwise
      */
     public boolean isAllowAllQueuedItems() {
         return allowAllQueuedItems;
+    }
+
+    /**
+     * Checks if descendants of all upstream jobs (as opposed to just completed ones) are allowed to build in
+     * lenient shutdown mode.
+     *
+     * @return true is downstream items of all started upstream jobs will build, false otherwise
+     */
+    public boolean isAllowAllDownstreamItems() {
+        return allowAllDownstreamItems;
     }
 
     /**
@@ -91,6 +103,15 @@ public class ShutdownConfiguration extends GlobalConfiguration {
      */
     public void setAllowAllQueuedItems(boolean allowAllQueuedItems) {
         this.allowAllQueuedItems = allowAllQueuedItems;
+    }
+
+    /**
+     * Sets the flag if descendants of all upstream jobs are allowed to build in lenient shutdown mode.
+     *
+     * @param allowAllDownstreamItems true - enabled, false - disabled
+     */
+    public void setAllowAllDownstreamItems(boolean allowAllDownstreamItems) {
+        this.allowAllDownstreamItems = allowAllDownstreamItems;
     }
 
     /**
@@ -161,6 +182,7 @@ public class ShutdownConfiguration extends GlobalConfiguration {
     public boolean configure(StaplerRequest staplerRequest, JSONObject json) throws FormException {
         shutdownMessage = json.getString("shutdownMessage");
         allowAllQueuedItems = json.getBoolean("allowAllQueuedItems");
+        allowAllDownstreamItems = json.getBoolean("allowAllDownstreamItems");
         allowWhiteListedProjects = json.getBoolean("allowWhiteListedProjects");
         whiteListedProjects.clear();
         whiteListedProjects.addAll(Arrays.asList(json.getString("whiteListedProjects").split(DELIMETER)));

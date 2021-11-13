@@ -35,6 +35,9 @@ f.section(title:_("Lenient Shutdown")) {
     f.entry(field: 'allowAllQueuedItems', title:_("Allow all queued items")) {
     	f.checkbox()
     }
+    f.entry(field: 'allowAllDownstreamItems', title:_("Allow all downstream items")) {
+        f.checkbox()
+    }
     f.entry(field: 'allowWhiteListedProjects', title:_("Allow white listed projects")) {
     	f.checkbox()
     }
