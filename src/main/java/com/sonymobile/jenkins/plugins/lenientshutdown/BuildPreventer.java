@@ -69,8 +69,8 @@ public class BuildPreventer extends QueueTaskDispatcher {
 
         CauseOfBlockage blockage = null; //Allow to run by default
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
-        boolean isWhitelistedProject = false;
-        boolean isWhiteListedUpStreamProject = false;
+        boolean isAllowListedProject = false;
+        boolean isAllowListedUpStreamProject = false;
 
         long queueId = item.getId();
 
@@ -78,21 +78,21 @@ public class BuildPreventer extends QueueTaskDispatcher {
         if ((item.task instanceof AbstractProject || item.task instanceof WorkflowJob)
                 && !shutdownManageLink.isPermittedQueueId(queueId)) {
             AbstractItem project = (AbstractItem)item.task;
-            // By design, whitelisted projects are allowed to begin if there are other runs ongoing
-            isWhitelistedProject = shutdownManageLink.isActiveQueueIds()
-                    && configuration.isWhiteListedProject(project.getFullName());
+            // By design, allow-listed projects are allowed to begin if there are other runs ongoing
+            isAllowListedProject = shutdownManageLink.isActiveQueueIds()
+                    && configuration.isAllowListedProject(project.getFullName());
 
             Set<Long> upstreamQueueIds = QueueUtils.getUpstreamQueueIds(item);
             boolean isPermittedByUpStream = shutdownManageLink.isAnyPermittedUpstreamProject(upstreamQueueIds);
-            isWhiteListedUpStreamProject = shutdownManageLink.isAnyWhiteListedUpstreamProject(upstreamQueueIds);
+            isAllowListedUpStreamProject = shutdownManageLink.isAnyAllowListedUpstreamProject(upstreamQueueIds);
 
-            if (!isPermittedByUpStream && !isWhitelistedProject && !isWhiteListedUpStreamProject) {
+            if (!isPermittedByUpStream && !isAllowListedProject && !isAllowListedUpStreamProject) {
                 logger.log(Level.FINE, "Preventing project {0} from running, "
                         + "since lenient shutdown is active", item.task.getDisplayName());
                 blockage = new GlobalShutdownBlockage();
             } else {
                 if (isPermittedByUpStream) {
-                    isWhitelistedProject = false;
+                    isAllowListedProject = false;
                 }
             }
         }
@@ -101,8 +101,8 @@ public class BuildPreventer extends QueueTaskDispatcher {
         if (blockage == null) {
             logger.log(Level.FINE, "Permitting {0} to start, even though lenient shutdown is pending",
                     item.task.getDisplayName());
-            if (isWhitelistedProject || isWhiteListedUpStreamProject) {
-                shutdownManageLink.addWhiteListedQueueId(queueId);
+            if (isAllowListedProject || isAllowListedUpStreamProject) {
+                shutdownManageLink.addAllowListedQueueId(queueId);
             } else {
                 shutdownManageLink.addPermittedUpstreamQueueId(queueId);
                 shutdownManageLink.addActiveQueueId(queueId);

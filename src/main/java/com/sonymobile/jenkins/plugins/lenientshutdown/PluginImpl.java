@@ -144,11 +144,11 @@ public class PluginImpl extends Plugin {
     }
 
     /**
-     * Checks if any of the project names in argument list are marked as white listed upstream
+     * Checks if any of the project names in argument list are marked as allow-listed upstream
      * projects for a specific node.
      * @param queueItemsIds the list of project names to check
      * @param nodeName the specific node name to check for
-     * @return true if at least one of the projects is white listed
+     * @return true if at least one of the projects is allow-listed
      */
     @Restricted(NoExternalUse.class)
     public boolean isAnyPermittedUpstreamQueueId(Set<Long> queueItemsIds, String nodeName) {

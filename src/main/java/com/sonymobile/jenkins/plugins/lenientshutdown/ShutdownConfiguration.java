@@ -54,12 +54,12 @@ public class ShutdownConfiguration extends GlobalConfiguration {
 
     private boolean allowAllDownstreamItems;
 
-    private boolean allowWhiteListedProjects;
+    private boolean allowAllowListedProjects;
 
     /**
-     * A list of projects that are allowed to run in case allowWhiteListedProjects is enabled.
+     * A list of projects that are allowed to run in case allowAllowListedProjects is enabled.
      */
-    private final Set<String> whiteListedProjects = Collections.synchronizedSet(new TreeSet<>());
+    private final Set<String> allowListedProjects = Collections.synchronizedSet(new TreeSet<>());
 
     /**
      * Constructor, loads persisted configuration.
@@ -88,12 +88,12 @@ public class ShutdownConfiguration extends GlobalConfiguration {
     }
 
     /**
-     * Checks if white listed projects are allowed to build in lenient shutdown mode.
+     * Checks if allow-listed projects are allowed to build in lenient shutdown mode.
      *
-     * @return true if white listed projects will build, false otherwise
+     * @return true if allow-listed projects will build, false otherwise
      */
-    public boolean isAllowWhiteListedProjects() {
-        return allowWhiteListedProjects;
+    public boolean isAllowAllowListedProjects() {
+        return allowAllowListedProjects;
     }
 
     /**
@@ -115,12 +115,12 @@ public class ShutdownConfiguration extends GlobalConfiguration {
     }
 
     /**
-     * Sets the flag if white listed projects are allowed or not.
+     * Sets the flag if allow-listed projects are allowed or not.
      *
-     * @param allowWhiteListedProjects true - enabled, false - disabled
+     * @param allowAllowListedProjects true - enabled, false - disabled
      */
-    public void setAllowWhiteListedProjects(boolean allowWhiteListedProjects) {
-        this.allowWhiteListedProjects = allowWhiteListedProjects;
+    public void setAllowAllowListedProjects(boolean allowAllowListedProjects) {
+        this.allowAllowListedProjects = allowAllowListedProjects;
     }
 
     /**
@@ -142,31 +142,31 @@ public class ShutdownConfiguration extends GlobalConfiguration {
     }
 
     /**
-     * Gets the white listed projects as a string.
+     * Gets the allow-listed projects as a string.
      *
-     * @return string with the white listed projects separated by newlines
+     * @return string with the allow-listed projects separated by newlines
      */
-    public String getWhiteListedProjectsText() {
-        return StringUtils.join(whiteListedProjects, "\n");
+    public String getAllowListedProjectsText() {
+        return StringUtils.join(allowListedProjects, "\n");
     }
 
     /**
-     * Gets the set of white listed projects.
+     * Gets the set of allow-listed projects.
      *
-     * @return Set of white listed projects
+     * @return Set of allow-listed projects
      */
-    public Set<String> getWhiteListedProjects() {
-        return whiteListedProjects;
+    public Set<String> getAllowListedProjects() {
+        return allowListedProjects;
     }
 
     /**
      * Checks whether the given project name is allowed to run.
      *
      * @param name the name of the project to check
-     * @return true if white listed projects are allowed and the given project name is found in the list
+     * @return true if allow-listed projects are allowed and the given project name is found in the list
      */
-    public boolean isWhiteListedProject(String name) {
-        return allowWhiteListedProjects && whiteListedProjects.contains(name);
+    public boolean isAllowListedProject(String name) {
+        return allowAllowListedProjects && allowListedProjects.contains(name);
     }
 
     /**
@@ -183,9 +183,9 @@ public class ShutdownConfiguration extends GlobalConfiguration {
         shutdownMessage = json.getString("shutdownMessage");
         allowAllQueuedItems = json.getBoolean("allowAllQueuedItems");
         allowAllDownstreamItems = json.getBoolean("allowAllDownstreamItems");
-        allowWhiteListedProjects = json.getBoolean("allowWhiteListedProjects");
-        whiteListedProjects.clear();
-        whiteListedProjects.addAll(Arrays.asList(json.getString("whiteListedProjects").split(DELIMETER)));
+        allowAllowListedProjects = json.getBoolean("allowAllowListedProjects");
+        allowListedProjects.clear();
+        allowListedProjects.addAll(Arrays.asList(json.getString("allowListedProjects").split(DELIMETER)));
         save();
         return true;
     }

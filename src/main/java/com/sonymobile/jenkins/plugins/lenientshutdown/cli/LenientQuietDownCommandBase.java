@@ -62,21 +62,21 @@ public abstract class LenientQuietDownCommandBase extends CLICommand {
     private boolean allowAllQueuedItemsOption;
 
     /**
-     * Allow white listed projects to run when lenient shutdown is active.
+     * Allow allow-listed projects to run when lenient shutdown is active.
      *
      */
-    @Option(name = "-w", aliases = { "--allow-whitelisted" },
-            usage = "Allow white listed projects to run while queue not empty.", required = false)
+    @Option(name = "-w", aliases = { "--allow-allowlisted" },
+            usage = "Allow allow-listed projects to run while queue not empty.", required = false)
     private boolean allowWhiteListedProjectsOption;
 
     /**
-     * The list of white listed projects.
+     * The list of allow-listed projects.
      *
      */
-    @Option(name = "-p", aliases = { "--whitelisted-projects" },
-            usage = "A semicolon separated list of white listed projects.",
+    @Option(name = "-p", aliases = { "--allowlisted-projects" },
+            usage = "A semicolon separated list of allow-listed projects.",
             required = false)
-    private String whiteListedProjects;
+    private String allowListedProjects;
 
     /**
      * transfer the options to the configuration.
@@ -89,11 +89,11 @@ public abstract class LenientQuietDownCommandBase extends CLICommand {
             config.save();
         }
         config.setAllowAllQueuedItems(allowAllQueuedItemsOption);
-        config.setAllowWhiteListedProjects(allowWhiteListedProjectsOption);
-        if (whiteListedProjects != null) {
-            config.getWhiteListedProjects().clear();
-            config.getWhiteListedProjects()
-                    .addAll(Arrays.asList(whiteListedProjects.split(DELIMETER)));
+        config.setAllowAllowListedProjects(allowWhiteListedProjectsOption);
+        if (allowListedProjects != null) {
+            config.getAllowListedProjects().clear();
+            config.getAllowListedProjects()
+                    .addAll(Arrays.asList(allowListedProjects.split(DELIMETER)));
         }
     }
 
@@ -110,11 +110,11 @@ public abstract class LenientQuietDownCommandBase extends CLICommand {
             stdout.println(Messages.OnlyUpstreamItemsAllowed());
         }
 
-        if (config.isAllowWhiteListedProjects()) {
-            stdout.println(Messages.WhiteListedProjectsAllowed());
-            stdout.println(config.getWhiteListedProjectsText());
+        if (config.isAllowAllowListedProjects()) {
+            stdout.println(Messages.AllowListedProjectsAllowed());
+            stdout.println(config.getAllowListedProjectsText());
         } else {
-            stdout.println(Messages.WhiteListedProjectsNotAllowed());
+            stdout.println(Messages.AllowListedProjectsNotAllowed());
         }
     }
 }

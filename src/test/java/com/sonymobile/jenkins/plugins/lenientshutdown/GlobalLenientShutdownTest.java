@@ -451,8 +451,8 @@ public class GlobalLenientShutdownTest {
         FreeStyleProject project = jenkinsRule.createFreeStyleProject("whitelisted");
 
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
-        configuration.setAllowWhiteListedProjects(true);
-        configuration.getWhiteListedProjects().add("whitelisted");
+        configuration.setAllowAllowListedProjects(true);
+        configuration.getAllowListedProjects().add("whitelisted");
         toggleLenientShutdown();
 
         waitForAnalysisToFinish();
@@ -483,8 +483,8 @@ public class GlobalLenientShutdownTest {
         FreeStyleProject whiteListedProject = jenkinsRule.createFreeStyleProject("whitelisted");
 
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
-        configuration.setAllowWhiteListedProjects(true);
-        configuration.getWhiteListedProjects().add("whitelisted");
+        configuration.setAllowAllowListedProjects(true);
+        configuration.getAllowListedProjects().add("whitelisted");
 
         parent.scheduleBuild2(0);
         waitForProjectInQueue(child);
@@ -519,8 +519,8 @@ public class GlobalLenientShutdownTest {
         Jenkins.getInstance().rebuildDependencyGraph();
 
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
-        configuration.setAllowWhiteListedProjects(true);
-        configuration.getWhiteListedProjects().add("whitelisted");
+        configuration.setAllowAllowListedProjects(true);
+        configuration.getAllowListedProjects().add("whitelisted");
 
         // Trigger build of the parent project, and wait for it to finish:
         parent.scheduleBuild2(0);
@@ -556,8 +556,8 @@ public class GlobalLenientShutdownTest {
         Jenkins.getInstance().rebuildDependencyGraph();
 
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
-        configuration.setAllowWhiteListedProjects(true);
-        configuration.getWhiteListedProjects().add("whitelisted");
+        configuration.setAllowAllowListedProjects(true);
+        configuration.getAllowListedProjects().add("whitelisted");
 
         parent.scheduleBuild2(0);
         waitForProjectInQueue(child);
@@ -597,8 +597,8 @@ public class GlobalLenientShutdownTest {
         Jenkins.getInstance().rebuildDependencyGraph();
 
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
-        configuration.setAllowWhiteListedProjects(true);
-        configuration.getWhiteListedProjects().add("whitelisted");
+        configuration.setAllowAllowListedProjects(true);
+        configuration.getAllowListedProjects().add("whitelisted");
 
         parent.scheduleBuild2(0);
         waitForProjectInQueue(child);

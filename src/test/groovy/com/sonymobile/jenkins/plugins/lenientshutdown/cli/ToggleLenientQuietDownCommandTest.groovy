@@ -87,7 +87,7 @@ class ToggleLenientQuietDownCommandTest extends BaseCliTest {
         assert cmd("toggle-lenient-quiet-down", "--allow-whitelisted").execute().waitFor() == 0 :
                 "Command did not exit correctly"
         assert ShutdownManageLink.instance.isGoingToShutdown() : "Should be shutting down now"
-        assert ShutdownConfiguration.instance.isAllowWhiteListedProjects() : "White listed projects should be allowed"
+        assert ShutdownConfiguration.instance.isAllowAllowListedProjects() : "White listed projects should be allowed"
     }
 
     /**
@@ -99,6 +99,6 @@ class ToggleLenientQuietDownCommandTest extends BaseCliTest {
         assert cmd("toggle-lenient-quiet-down", "-p", "whitelisted;somename;anotherone").execute().waitFor() == 0 :
                 "Command did not exit correctly"
         assert ShutdownManageLink.instance.isGoingToShutdown() : "Should be shutting down now"
-        assert ShutdownConfiguration.instance.getWhiteListedProjects().size() == 3 : "White listed projects size should be 3"
+        assert ShutdownConfiguration.instance.getAllowListedProjects().size() == 3 : "White listed projects size should be 3"
     }
 }

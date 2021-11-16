@@ -38,12 +38,12 @@ f.section(title:_("Lenient Shutdown")) {
     f.entry(field: 'allowAllDownstreamItems', title:_("Allow all downstream items")) {
         f.checkbox()
     }
-    f.entry(field: 'allowWhiteListedProjects', title:_("Allow white listed projects")) {
+    f.entry(field: 'allowAllowListedProjects', title:_("Allow allow-listed projects")) {
     	f.checkbox()
     }
-    f.entry(field:'whiteListedProjects', 
-    		title:_("White listed projects"),
+    f.entry(field:'allowListedProjects',
+    		title:_("Allow-listed projects"),
     		description:_("One entry per line.")) {
-    	f.textarea(value:instance.whiteListedProjectsText)
+    	f.textarea(value:instance.allowListedProjectsText)
     }
 }

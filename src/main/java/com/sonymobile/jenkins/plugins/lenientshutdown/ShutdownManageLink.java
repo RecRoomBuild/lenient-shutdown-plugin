@@ -66,9 +66,9 @@ public class ShutdownManageLink extends ManagementLink {
     private final Set<Long> activeQueueIds = Collections.synchronizedSet(new HashSet<Long>());
 
     /**
-     * The list of queue ids belonging to white listed projects runs
+     * The list of queue ids belonging to allow-listed projects runs
      */
-    private final Set<Long> whiteListedQueueIds = Collections.synchronizedSet(new HashSet<Long>());
+    private final Set<Long> allowListedQueueIds = Collections.synchronizedSet(new HashSet<Long>());
 
     private boolean isGoingToShutdown;
     private boolean analyzing;
@@ -216,7 +216,7 @@ public class ShutdownManageLink extends ManagementLink {
             service.submit(() -> {
                 permittedQueueIds.clear();
                 activeQueueIds.clear();
-                whiteListedQueueIds.clear();
+                allowListedQueueIds.clear();
                 permittedQueueIds.addAll(QueueUtils.getPermittedQueueItemIds());
                 permittedQueueIds.addAll(QueueUtils.getRunningProjectQueueIds());
                 activeQueueIds.addAll(permittedQueueIds);
@@ -239,7 +239,7 @@ public class ShutdownManageLink extends ManagementLink {
      * Checks if any of the queue ids in argument list is in the list of permitted queue ids.
      *
      * @param queueIds the list of queue ids to check
-     * @return true if at least one of the projects is white listed
+     * @return true if at least one of the projects is allow-listed
      */
     public boolean isAnyPermittedUpstreamProject(Set<Long> queueIds) {
         Collection<?> intersection = CollectionUtils.intersection(queueIds, permittedQueueIds);
@@ -247,13 +247,13 @@ public class ShutdownManageLink extends ManagementLink {
     }
 
     /**
-     * Checks if any of the queue ids in argument list is coming from a white listed project run.
+     * Checks if any of the queue ids in argument list is coming from an allow-listed project run.
      *
      * @param queueIds the list of queue ids to check
-     * @return true if at least one of the projects is white listed
+     * @return true if at least one of the projects is allow-listed
      */
-    public boolean isAnyWhiteListedUpstreamProject(Set<Long> queueIds) {
-        Collection<?> intersection = CollectionUtils.intersection(queueIds, whiteListedQueueIds);
+    public boolean isAnyAllowListedUpstreamProject(Set<Long> queueIds) {
+        Collection<?> intersection = CollectionUtils.intersection(queueIds, allowListedQueueIds);
         return !intersection.isEmpty();
     }
 
@@ -288,7 +288,7 @@ public class ShutdownManageLink extends ManagementLink {
     /**
      * Adds a queue id to the set of permitted upstream queue ids.
      *
-     * @param id the queue id to add to white list
+     * @param id the queue id to add to allow-list
      */
     public void addPermittedUpstreamQueueId(long id) {
         permittedQueueIds.add(id);
@@ -305,11 +305,11 @@ public class ShutdownManageLink extends ManagementLink {
     }
 
     /**
-     * Adds the queue id to the set of white listed queue ids.
+     * Adds the queue id to the set of allow-listed queue ids.
      *
      * @param id the queue id to add
      */
-    public void addWhiteListedQueueId(long id) {
-        whiteListedQueueIds.add(id);
+    public void addAllowListedQueueId(long id) {
+        allowListedQueueIds.add(id);
     }
 }
