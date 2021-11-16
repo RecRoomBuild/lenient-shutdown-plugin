@@ -29,13 +29,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import hudson.Extension;
-import hudson.model.Computer;
-import hudson.model.Executor;
-import hudson.model.Run;
-import hudson.model.TaskListener;
-import hudson.model.User;
+import hudson.model.*;
 import hudson.model.listeners.RunListener;
+import jenkins.model.Jenkins;
 import jenkins.util.Timer;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 
 /**
  * Listens for completed builds and sets nodes as offline when they are
@@ -46,40 +44,42 @@ import jenkins.util.Timer;
  * @author Fredrik Persson &lt;fredrik6.persson@sonymobile.com&gt;
  */
 @Extension(ordinal = Double.MAX_VALUE)
-public class ShutdownRunListener<R extends Run> extends RunListener<R> {
+public class ShutdownRunListener<R extends Run<?, ?>> extends RunListener<R> {
 
     private static final int TASK_DELAY_SECONDS = 10;
 
     private static final Logger logger = Logger.getLogger(ShutdownRunListener.class.getName());
 
     @Override
-    public void onCompleted(final R r, TaskListener listener) {
+    public void onFinalized(final R r) {
         final PluginImpl plugin = PluginImpl.getInstance();
+
+        if (r instanceof WorkflowRun) {
+            // WorkflowRuns are performed on one-off executors (usually on the master node),
+            // so we must check all computers
+            for (String nodeName : plugin.getLenientOfflineNodes()) {
+                checkForLenientShutdown(nodeName);
+            }
+        }
 
         Executor executor = r.getExecutor();
         if (executor != null) {
             final Computer computer = executor.getOwner();
-            if (computer != null) {
-                final String nodeName = computer.getName();
+            final String nodeName = computer.getName();
 
-                if (plugin.isNodeShuttingDown(nodeName)) {
-                    //Schedule checking if all builds are completed on the build node after a delay
-                    Runnable isNodeIdleTask = new Runnable() {
-                        @Override
-                        public void run() {
-                            if (plugin.isNodeShuttingDown(nodeName) && !computer.isTemporarilyOffline()
-                                    && !QueueUtils.isBuilding(computer)
-                                    && !QueueUtils.hasNodeExclusiveItemInQueue(computer)) {
-                                logger.log(Level.INFO, "Node {0} idle; setting offline since lenient "
-                                        + "shutdown was active for this node", nodeName);
+            if (plugin.isNodeShuttingDown(nodeName)) {
+                //Schedule checking if all builds are completed on the build node after a delay
+                Runnable isNodeIdleTask = () -> {
+                    if (plugin.isNodeShuttingDown(nodeName) && !computer.isTemporarilyOffline()
+                            && !QueueUtils.isBuilding(computer)) {
+                        logger.log(Level.INFO, "Node {0} idle; setting offline since lenient "
+                                + "shutdown was active for this node", nodeName);
 
-                                User user = plugin.getOfflineByUser(nodeName);
-                                computer.setTemporarilyOffline(true, new LenientOfflineCause(user));
-                            }
-                        }
-                    };
-                    Timer.get().schedule(isNodeIdleTask, TASK_DELAY_SECONDS, TimeUnit.SECONDS);
-                }
+                        User user = plugin.getOfflineByUser(nodeName);
+                        computer.setTemporarilyOffline(true, new LenientOfflineCause(user));
+                    }
+                };
+                Timer.get().schedule(isNodeIdleTask, TASK_DELAY_SECONDS, TimeUnit.SECONDS);
             }
         }
 
@@ -88,6 +88,27 @@ public class ShutdownRunListener<R extends Run> extends RunListener<R> {
 
         if (isGoingToShutdown) {
             shutdownManageLink.removeActiveQueueId(r.getQueueId());
+        }
+    }
+
+    private void checkForLenientShutdown(String nodeName) {
+        final PluginImpl plugin = PluginImpl.getInstance();
+        Computer computer = Jenkins.get().getComputer(nodeName);
+        if (plugin.isNodeShuttingDown(nodeName)) {
+            //Schedule checking if all builds are completed on the build node after a delay
+            Runnable isNodeIdleTask = () -> {
+                if (plugin.isNodeShuttingDown(nodeName)
+                        && computer != null
+                        && !computer.isTemporarilyOffline()
+                        && !QueueUtils.isBuilding(computer)) {
+                    logger.log(Level.INFO, "Node {0} idle; setting offline since lenient "
+                            + "shutdown was active for this node", nodeName);
+
+                    User user = plugin.getOfflineByUser(nodeName);
+                    computer.setTemporarilyOffline(true, new LenientOfflineCause(user));
+                }
+            };
+            Timer.get().schedule(isNodeIdleTask, TASK_DELAY_SECONDS, TimeUnit.SECONDS);
         }
     }
 }

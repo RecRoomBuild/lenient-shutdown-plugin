@@ -313,7 +313,7 @@ public class SlaveLenientOfflineTest {
      * @throws Exception if something goes wrong
      */
     private void toggleLenientSlaveOffline(Node node) throws Exception {
-        String url = node.toComputer().getUrl() + ShutdownSlaveAction.URL;
+        String url = node.toComputer().getUrl() + ShutdownNodeAction.URL;
         WebClient client = jenkinsRule.createWebClient();
         client.login("alice");
         client.goTo(url);

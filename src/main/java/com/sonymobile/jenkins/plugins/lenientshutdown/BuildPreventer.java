@@ -30,10 +30,11 @@ import java.util.logging.Logger;
 import com.sonymobile.jenkins.plugins.lenientshutdown.blockcauses.GlobalShutdownBlockage;
 import com.sonymobile.jenkins.plugins.lenientshutdown.blockcauses.NodeShutdownBlockage;
 
+import hudson.model.*;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
+
 import hudson.Extension;
-import hudson.model.AbstractProject;
-import hudson.model.Node;
-import hudson.model.Queue;
 import hudson.model.queue.CauseOfBlockage;
 import hudson.model.queue.QueueTaskDispatcher;
 
@@ -54,18 +55,30 @@ public class BuildPreventer extends QueueTaskDispatcher {
      */
     @Override
     public CauseOfBlockage canRun(Queue.Item item) {
-        CauseOfBlockage blockage = null; //Allow to run by default
-
         ShutdownManageLink shutdownManageLink = ShutdownManageLink.getInstance();
         boolean isGoingToShutdown = shutdownManageLink.isGoingToShutdown();
+
+        if (!isGoingToShutdown) {
+            return null;
+        }
+
+        // PlaceholderTasks are part of already-running runs, and are allowed to go
+        if (item.task instanceof PlaceholderTask) {
+            return null;
+        }
+
+        CauseOfBlockage blockage = null; //Allow to run by default
         ShutdownConfiguration configuration = ShutdownConfiguration.getInstance();
         boolean isWhitelistedProject = false;
         boolean isWhiteListedUpStreamProject = false;
 
-        if (isGoingToShutdown
-                && item.task instanceof AbstractProject
-                && !shutdownManageLink.isPermittedQueueId(item.getId())) {
-            AbstractProject project = (AbstractProject)item.task;
+        long queueId = item.getId();
+
+        // AbstractProjects and WorkflowJobs are checked to see if they can run
+        if ((item.task instanceof AbstractProject || item.task instanceof WorkflowJob)
+                && !shutdownManageLink.isPermittedQueueId(queueId)) {
+            AbstractItem project = (AbstractItem)item.task;
+            // By design, whitelisted projects are allowed to begin if there are other runs ongoing
             isWhitelistedProject = shutdownManageLink.isActiveQueueIds()
                     && configuration.isWhiteListedProject(project.getFullName());
 
@@ -75,7 +88,7 @@ public class BuildPreventer extends QueueTaskDispatcher {
 
             if (!isPermittedByUpStream && !isWhitelistedProject && !isWhiteListedUpStreamProject) {
                 logger.log(Level.FINE, "Preventing project {0} from running, "
-                        + "since lenient shutdown is active", project.getFullName());
+                        + "since lenient shutdown is active", item.task.getDisplayName());
                 blockage = new GlobalShutdownBlockage();
             } else {
                 if (isPermittedByUpStream) {
@@ -85,12 +98,14 @@ public class BuildPreventer extends QueueTaskDispatcher {
         }
 
         //Set the project as allowed upstream project if it was not blocked and shutdown enabled:
-        if (blockage == null && isGoingToShutdown) {
+        if (blockage == null) {
+            logger.log(Level.FINE, "Permitting {0} to start, even though lenient shutdown is pending",
+                    item.task.getDisplayName());
             if (isWhitelistedProject || isWhiteListedUpStreamProject) {
-                shutdownManageLink.addWhiteListedQueueId(item.getId());
+                shutdownManageLink.addWhiteListedQueueId(queueId);
             } else {
-                shutdownManageLink.addPermittedUpstreamQueueId(item.getId());
-                shutdownManageLink.addActiveQueueId(item.getId());
+                shutdownManageLink.addPermittedUpstreamQueueId(queueId);
+                shutdownManageLink.addActiveQueueId(queueId);
             }
         }
 
@@ -111,24 +126,33 @@ public class BuildPreventer extends QueueTaskDispatcher {
         String nodeName = node.getNodeName();
         boolean nodeIsGoingToShutdown = plugin.isNodeShuttingDown(nodeName);
 
-        if (nodeIsGoingToShutdown
-                && item.task instanceof AbstractProject
-                && !plugin.wasAlreadyQueued(item.getId(), nodeName)) {
+        if (!nodeIsGoingToShutdown) {
+            return null;
+        }
 
-            boolean otherNodeCanBuild = QueueUtils.canOtherNodeBuild(item, node);
-            Set<Long> upstreamQueueIds = QueueUtils.getUpstreamQueueIds(item);
-
-            if (otherNodeCanBuild
-                    || (!otherNodeCanBuild && !plugin.isAnyPermittedUpstreamQueueId(upstreamQueueIds, nodeName))) {
-                logger.log(Level.FINE, "Preventing project {0} from running on node {1}, "
-                        + "since lenient shutdown is active", new String[] { item.getDisplayName(), nodeName });
-                blockage = new NodeShutdownBlockage();
+        long queueId = item.getId();
+        if (item.task instanceof PlaceholderTask) {
+            Run<?, ?> run = ((PlaceholderTask) item.task).run();
+            if (run != null) {
+                queueId = run.getQueueId();
             }
         }
 
-        //Set the project as allowed upstream project if it was not blocked and node shutdown enabled:
-        if (blockage == null && nodeIsGoingToShutdown) {
-            plugin.addPermittedUpstreamQueueId(item.getId(), nodeName);
+        if (!plugin.isPermittedToRun(queueId, nodeName)) {
+            blockage = new NodeShutdownBlockage();
+            logger.log(Level.FINE, "Preventing task {0} from running on node {1}, "
+                    + "since lenient shutdown is active on that node",
+                    new String[] {
+                            item.task.getDisplayName(),
+                            nodeName,
+            });
+        } else {
+            logger.log(Level.FINE, "Allowing task {0} to run on node {1}, "
+                            + "even though node is shutting down",
+                    new String[] {
+                            item.task.getDisplayName(),
+                            nodeName,
+                    });
         }
 
         return blockage;

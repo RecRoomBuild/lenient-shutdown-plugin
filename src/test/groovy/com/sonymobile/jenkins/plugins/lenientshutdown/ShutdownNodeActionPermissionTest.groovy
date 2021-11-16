@@ -38,11 +38,11 @@ import org.jvnet.hudson.test.SleepBuilder
 
 
 /**
- * Security and Permissions tests for {@link ShutdownSlaveAction}.
+ * Security and Permissions tests for {@link ShutdownNodeAction}.
  *
  * @author &lt;robert.sandell@sonymobile.com&gt;
  */
-class ShutdownSlaveActionPermissionTest {
+class ShutdownNodeActionPermissionTest {
 
     @Rule
     public GroovyJenkinsRule jenkins = new GroovyJenkinsRule()
@@ -119,7 +119,7 @@ class ShutdownSlaveActionPermissionTest {
     @Test
     void testDoIndex() {
         startBuild()
-        jenkins.createWebClient().getPage(slave, ShutdownSlaveAction.URL)
+        jenkins.createWebClient().getPage(slave, ShutdownNodeAction.URL)
         assert PluginImpl.instance.isNodeShuttingDown(slave.nodeName) : "Unaffected"
     }
 
@@ -222,7 +222,7 @@ class ShutdownSlaveActionPermissionTest {
     @Test(expected = FailingHttpStatusCodeException)
     void testDoIndexNoPermissionAnonymous() {
         setupSecurity()
-        jenkins.createWebClient().getPage(slave, ShutdownSlaveAction.URL)
+        jenkins.createWebClient().getPage(slave, ShutdownNodeAction.URL)
     }
 
     /**
@@ -231,7 +231,7 @@ class ShutdownSlaveActionPermissionTest {
     @Test(expected = FailingHttpStatusCodeException)
     void testDoIndexNoPermissionBobby() {
         setupSecurity()
-        jenkins.createWebClient().login("bobby").getPage(slave, ShutdownSlaveAction.URL)
+        jenkins.createWebClient().login("bobby").getPage(slave, ShutdownNodeAction.URL)
     }
 
     /**
@@ -244,7 +244,7 @@ class ShutdownSlaveActionPermissionTest {
         startBuild()
 		TimeUnit.SECONDS.sleep(1);
         
-        client.getPage(slave, ShutdownSlaveAction.URL)
+        client.getPage(slave, ShutdownNodeAction.URL)
         
         assert PluginImpl.instance.isNodeShuttingDown(slave.nodeName) : "Unaffected"
     }
@@ -257,7 +257,7 @@ class ShutdownSlaveActionPermissionTest {
         setupSecurity()
         def client = jenkins.createWebClient().login("alice")
         PluginImpl.instance.toggleNodeShuttingDown(slave.nodeName)
-        client.getPage(slave, ShutdownSlaveAction.URL)
+        client.getPage(slave, ShutdownNodeAction.URL)
         assert !PluginImpl.instance.isNodeShuttingDown(slave.nodeName) : "Unaffected"
     }
 

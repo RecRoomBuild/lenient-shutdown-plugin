@@ -31,14 +31,17 @@ import hudson.util.HttpResponses;
 import org.kohsuke.stapler.HttpResponse;
 
 import java.io.IOException;
+import java.util.logging.Logger;
 
 /**
- * Action to be displayed on computer pages for turning slaves
+ * Action to be displayed on computer pages for turning nodes
  * offline leniently.
  *
  * @author Fredrik Persson &lt;fredrik6.persson@sonymobile.com&gt;
  */
-public class ShutdownSlaveAction implements RootAction {
+public class ShutdownNodeAction implements RootAction {
+
+    private static final Logger logger = Logger.getLogger(ShutdownNodeAction.class.getName());
 
     /**
      * URL to this action.
@@ -46,12 +49,12 @@ public class ShutdownSlaveAction implements RootAction {
     public static final String URL = "lenientshutdown";
 
     /**
-     * Icon visible when it's possible to enable lenient shutdown for a slave.
+     * Icon visible when it's possible to enable lenient shutdown for a node.
      */
     public static final String ENABLE_ICON = "/images/system-log-out-small.png";
 
     /**
-     * Icon visible when it's possible to disable lenient shutdown for a slave.
+     * Icon visible when it's possible to disable lenient shutdown for a node.
      */
     public static final String DISABLE_ICON = "edit-delete.png";
 
@@ -61,7 +64,7 @@ public class ShutdownSlaveAction implements RootAction {
      * Constructor.
      * @param computer the computer for which this action is created
      */
-    public ShutdownSlaveAction(Computer computer) {
+    public ShutdownNodeAction(Computer computer) {
         this.computer = computer;
     }
 

@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -56,7 +57,11 @@ public class PluginImpl extends Plugin {
     /**
      * Node name -> is in lenient offline mode
      */
-    private transient Map<String, Boolean> lenientOfflineSlaves = new CopyOnWriteMap.Hash<String, Boolean>();
+    private transient final Set<String> lenientOfflineNodes = ConcurrentHashMap.newKeySet();
+
+    public Set<String> getLenientOfflineNodes() {
+        return Collections.unmodifiableSet(lenientOfflineNodes);
+    }
 
     /**
      * Node name -> triggered offline by user
@@ -66,7 +71,7 @@ public class PluginImpl extends Plugin {
     /**
      * Node name -> Set of queue item ids that are allowed to build
      */
-    private Map<String, Set<Long>> permittedSlaveQueuedItemIds = Collections.synchronizedMap(
+    private Map<String, Set<Long>> permittedNodeItemIds = Collections.synchronizedMap(
             new HashMap<String, Set<Long>>());
 
     /**
@@ -75,17 +80,16 @@ public class PluginImpl extends Plugin {
      * @return the singleton.
      */
     public static PluginImpl getInstance() {
-        return Jenkins.getInstance().getPlugin(PluginImpl.class);
+        return Jenkins.get().getPlugin(PluginImpl.class);
     }
 
     /**
      * Checks if argument node is shutting down leniently.
-     * @param nodeName the slave name to check
+     * @param nodeName the node name to check
      * @return true if node is shutting down, otherwise false
      */
     public boolean isNodeShuttingDown(String nodeName) {
-        return lenientOfflineSlaves.containsKey(nodeName)
-                && lenientOfflineSlaves.get(nodeName);
+        return lenientOfflineNodes.contains(nodeName);
     }
 
     /**
@@ -93,12 +97,13 @@ public class PluginImpl extends Plugin {
      * @param nodeName the node name to toggle for
      */
     public synchronized void toggleNodeShuttingDown(String nodeName) {
-        Boolean nodeShuttingDown = lenientOfflineSlaves.get(nodeName);
-        if (nodeShuttingDown == null) {
-            lenientOfflineSlaves.put(nodeName, true);
-        } else {
-            lenientOfflineSlaves.put(nodeName, !nodeShuttingDown);
+        if (!lenientOfflineNodes.remove(nodeName)) {
+            lenientOfflineNodes.add(nodeName);
         }
+    }
+
+    public synchronized boolean cancelNodeShuttingDown(String nodeName) {
+        return lenientOfflineNodes.remove(nodeName);
     }
 
     /**
@@ -114,21 +119,19 @@ public class PluginImpl extends Plugin {
         if (node == null) {
             return;
         }
-        if (QueueUtils.isBuilding(computer) || QueueUtils.hasNodeExclusiveItemInQueue(computer)) {
+        if (QueueUtils.isBuilding(computer)) {
             //Doing some work; we want to take offline leniently
             final String nodeName = node.getNodeName();
             toggleNodeShuttingDown(nodeName);
             setOfflineByUser(nodeName, User.current());
 
             ExecutorService service = new SecurityContextExecutorService(Executors.newSingleThreadExecutor());
-            service.submit(new Runnable() {
-                @Override
-                public void run() {
-                    Set<Long> permittedQueuedItemIds = getPermittedQueuedItemIds(nodeName);
-                    permittedQueuedItemIds.clear();
-                    permittedQueuedItemIds.addAll(QueueUtils.getPermittedQueueItemIds(nodeName));
-                    permittedQueuedItemIds.addAll(QueueUtils.getRunninProjectsQueueIDs(nodeName));
-                }
+            service.submit(() -> {
+                Set<Long> permittedNodeItemIds = getPermittedNodeItemIds(nodeName);
+                permittedNodeItemIds.clear();
+                // when marked for lenient shutdown, a node is only allowed to run items which have already begun
+                // on that node
+                permittedNodeItemIds.addAll(QueueUtils.getRunningProjectsQueueIDs(nodeName));
             });
 
         } else { //No builds; we can take offline directly
@@ -142,15 +145,15 @@ public class PluginImpl extends Plugin {
 
     /**
      * Checks if any of the project names in argument list are marked as white listed upstream
-     * projects for a specific slave.
+     * projects for a specific node.
      * @param queueItemsIds the list of project names to check
-     * @param nodeName the specific slave name to check for
+     * @param nodeName the specific node name to check for
      * @return true if at least one of the projects is white listed
      */
     @Restricted(NoExternalUse.class)
     public boolean isAnyPermittedUpstreamQueueId(Set<Long> queueItemsIds, String nodeName) {
         boolean isPermitted = false;
-        Set<Long> permittedQueueItemIds = getPermittedQueuedItemIds(nodeName);
+        Set<Long> permittedQueueItemIds = getPermittedNodeItemIds(nodeName);
         if (permittedQueueItemIds != null) {
             Collection<?> intersection = CollectionUtils.intersection(queueItemsIds, permittedQueueItemIds);
             isPermitted = !intersection.isEmpty();
@@ -160,30 +163,30 @@ public class PluginImpl extends Plugin {
 
     /**
      * Returns true if argument queue item was queued when lenient shutdown was activated
-     * for a specific slave.
+     * for a specific node.
      * @param id the queue item id to check for
-     * @param nodeName the specific slave name to check for
+     * @param nodeName the specific node name to check for
      * @return true if it was queued
      */
     @Restricted(NoExternalUse.class)
-    public boolean wasAlreadyQueued(long id, String nodeName) {
-        Set<Long> alreadyQueuedItemIds = getPermittedQueuedItemIds(nodeName);
+    public boolean isPermittedToRun(long id, String nodeName) {
+        Set<Long> alreadyQueuedItemIds = getPermittedNodeItemIds(nodeName);
         return alreadyQueuedItemIds.contains(id);
     }
 
     /**
-     * Adds argument project as a permitted upstream project for a specific slave.
+     * Adds argument project as a permitted upstream project for a specific node.
      * @param id the queue id to add
-     * @param nodeName the slave name to add the permitted project for
+     * @param nodeName the node name to add the permitted project for
      */
     @Restricted(NoExternalUse.class)
     public void addPermittedUpstreamQueueId(long id, String nodeName) {
-        Set<Long> permittedUpstreamProjectNames = getPermittedQueuedItemIds(nodeName);
+        Set<Long> permittedUpstreamProjectNames = getPermittedNodeItemIds(nodeName);
         permittedUpstreamProjectNames.add(id);
     }
 
     /**
-     * Sets the argument user as the user that put the argument node in lenient offline mode.
+     * Sets the argument user as the user that put the argument node in lenient offline node.
      * @param nodeName the node that was put in lenient offline mode
      * @param user the user that put the node into lenient offline mode
      */
@@ -194,7 +197,7 @@ public class PluginImpl extends Plugin {
     /**
      * Gets the user that put the argument node in lenient offline mode.
      * @param nodeName the node to get user for
-     * @return user that put the slave in lenient offline mode
+     * @return user that put the node in lenient offline mode
      */
     public User getOfflineByUser(String nodeName) {
         User user = userTriggers.get(nodeName);
@@ -206,18 +209,13 @@ public class PluginImpl extends Plugin {
 
     /**
      * Gets all item ids that were queued and could only be build on
-     * the argument specific slave when it was set to lenient offline mode.
+     * the argument specific node when it was set to lenient offline mode.
      * @param nodeName the node to get specific queue items for
      * @return set of queued item ids
      */
     @Restricted(NoExternalUse.class)
-    public synchronized Set<Long> getPermittedQueuedItemIds(String nodeName) {
-        Set<Long> permittedQueuedItemIds = permittedSlaveQueuedItemIds.get(nodeName);
-        if (permittedQueuedItemIds == null) {
-            permittedQueuedItemIds = new HashSet<Long>();
-            permittedSlaveQueuedItemIds.put(nodeName, permittedQueuedItemIds);
-        }
-        return permittedQueuedItemIds;
+    public synchronized Set<Long> getPermittedNodeItemIds(String nodeName) {
+        return permittedNodeItemIds.computeIfAbsent(nodeName, k -> new HashSet<Long>());
     }
 
 }

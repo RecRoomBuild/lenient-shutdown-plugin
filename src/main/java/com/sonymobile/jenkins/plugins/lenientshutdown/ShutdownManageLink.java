@@ -44,6 +44,8 @@ import hudson.security.Permission;
 import jenkins.model.Jenkins;
 import jenkins.security.SecurityContextExecutorService;
 
+import javax.annotation.Nonnull;
+
 /**
  * Adds a link on the manage Jenkins page for lenient shutdown.
  *
@@ -53,20 +55,20 @@ import jenkins.security.SecurityContextExecutorService;
 public class ShutdownManageLink extends ManagementLink {
 
     /**
-     * The list of queue ids, that belong to projects that where running at time of lenient shutdown
+     * The list of queue ids, that belong to projects that were running at time of lenient shutdown
      * and any of the downstream builds.
      */
-    private Set<Long> permittedQueueIds = Collections.synchronizedSet(new HashSet<Long>());
+    private final Set<Long> permittedQueueIds = Collections.synchronizedSet(new HashSet<Long>());
 
     /**
      * The list of queue ids that correspond to running builds of permitted queue ids
      */
-    private Set<Long> activeQueueIds = Collections.synchronizedSet(new HashSet<Long>());
+    private final Set<Long> activeQueueIds = Collections.synchronizedSet(new HashSet<Long>());
 
     /**
      * The list of queue ids belonging to white listed projects runs
      */
-    private Set<Long> whiteListedQueueIds = Collections.synchronizedSet(new HashSet<Long>());
+    private final Set<Long> whiteListedQueueIds = Collections.synchronizedSet(new HashSet<Long>());
 
     private boolean isGoingToShutdown;
     private boolean analyzing;
@@ -87,7 +89,7 @@ public class ShutdownManageLink extends ManagementLink {
      * @return instance the ShutdownMangeLink.
      */
     public static ShutdownManageLink getInstance() {
-        List<ManagementLink> list = Jenkins.getInstance().getManagementLinks();
+        List<ManagementLink> list = Jenkins.get().getManagementLinks();
         for (ManagementLink link : list) {
             if (link instanceof ShutdownManageLink) {
                 instance = (ShutdownManageLink)link;
@@ -117,6 +119,12 @@ public class ShutdownManageLink extends ManagementLink {
             return Messages.CancelShutdownTitle();
         }
         return Messages.ActivateShutdownTitle();
+    }
+
+    @Nonnull
+    @Override
+    public Category getCategory() {
+        return Category.TOOLS;
     }
 
     /**
@@ -151,6 +159,7 @@ public class ShutdownManageLink extends ManagementLink {
      * @return Jenkins administer permission.
      */
     @Override
+    @Nonnull
     public Permission getRequiredPermission() {
         return Jenkins.ADMINISTER;
     }
@@ -190,7 +199,7 @@ public class ShutdownManageLink extends ManagementLink {
      * @throws IOException if unable to redirect
      */
     public synchronized void doIndex(StaplerRequest req, StaplerResponse rsp) throws IOException {
-        Jenkins.getInstance().checkPermission(getRequiredPermission());
+        Jenkins.get().checkPermission(getRequiredPermission());
 
         performToggleGoingToShutdown();
         rsp.sendRedirect2(req.getContextPath() + "/manage");
@@ -204,17 +213,14 @@ public class ShutdownManageLink extends ManagementLink {
         toggleGoingToShutdown();
         if (isGoingToShutdown()) {
             ExecutorService service = new SecurityContextExecutorService(Executors.newSingleThreadExecutor());
-            service.submit(new Runnable() {
-                @Override
-                public void run() {
-                    permittedQueueIds.clear();
-                    activeQueueIds.clear();
-                    whiteListedQueueIds.clear();
-                    permittedQueueIds.addAll(QueueUtils.getPermittedQueueItemIds());
-                    permittedQueueIds.addAll(QueueUtils.getRunningProjectQueueIds());
-                    activeQueueIds.addAll(permittedQueueIds);
-                    analyzing = false;
-                }
+            service.submit(() -> {
+                permittedQueueIds.clear();
+                activeQueueIds.clear();
+                whiteListedQueueIds.clear();
+                permittedQueueIds.addAll(QueueUtils.getPermittedQueueItemIds());
+                permittedQueueIds.addAll(QueueUtils.getRunningProjectQueueIds());
+                activeQueueIds.addAll(permittedQueueIds);
+                analyzing = false;
             });
         }
     }

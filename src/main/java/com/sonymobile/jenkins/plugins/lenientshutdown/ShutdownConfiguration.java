@@ -59,7 +59,7 @@ public class ShutdownConfiguration extends GlobalConfiguration {
     /**
      * A list of projects that are allowed to run in case allowWhiteListedProjects is enabled.
      */
-    private Set<String> whiteListedProjects = Collections.synchronizedSet(new TreeSet<String>());
+    private final Set<String> whiteListedProjects = Collections.synchronizedSet(new TreeSet<>());
 
     /**
      * Constructor, loads persisted configuration.

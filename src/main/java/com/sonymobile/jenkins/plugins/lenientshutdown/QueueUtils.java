@@ -30,8 +30,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
-import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.Cause;
 import hudson.model.Computer;
@@ -39,8 +41,9 @@ import hudson.model.Executor;
 import hudson.model.Node;
 import hudson.model.Queue;
 import hudson.model.Run;
-import hudson.model.Queue.BuildableItem;
 import jenkins.model.Jenkins;
+import org.jenkinsci.plugins.workflow.job.WorkflowJob;
+import org.jenkinsci.plugins.workflow.support.steps.ExecutorStepExecution.PlaceholderTask;
 
 /**
  * Utility class for getting information about the build queue and ongoing builds.
@@ -48,6 +51,8 @@ import jenkins.model.Jenkins;
  * @author Fredrik Persson &lt;fredrik6.persson@sonymobile.com&gt;
  */
 public final class QueueUtils {
+
+    private static final Logger logger = Logger.getLogger(QueueUtils.class.getName());
 
     /**
      * Hiding utility class constructor.
@@ -57,27 +62,41 @@ public final class QueueUtils {
     /**
      * Returns the set of queue ids for items that are in the build queue.
      * Depending on the configuration this is either just those that have a completed upstream
-     * project if they are a project build or all entries that are currently in the queue.
+     * project if they are a project build,
+     * all entries that have any upstream build,
+     * or all entries that are currently in the queue.
      * Note: This method locks the queue; don't use excessively.
      * @return set of item ids
      */
     public static Set<Long> getPermittedQueueItemIds() {
-        Set<Long> queuedIds = new HashSet<Long>();
+        Set<Long> queuedIds = new HashSet<>();
         boolean allowAllQueuedItems = ShutdownConfiguration.getInstance().isAllowAllQueuedItems();
+        boolean allowAllDownstreamItems = ShutdownConfiguration.getInstance().isAllowAllDownstreamItems();
         for (Queue.Item item : Queue.getInstance().getItems()) {
-            if (item.task instanceof AbstractProject) {
+            long queueId = item.getId();
+            if (item.task instanceof PlaceholderTask) {
+                Run<?, ?> run = ((PlaceholderTask) item.task).run();
+                if (run != null) {
+                    queueId = run.getQueueId();
+                }
+            }
+
+            if (item.task instanceof AbstractProject
+                    || item.task instanceof WorkflowJob
+                    || item.task instanceof PlaceholderTask) {
                 if (allowAllQueuedItems) {
-                    queuedIds.add(item.getId());
+                    queuedIds.add(queueId);
                 } else {
-                    for (AbstractBuild upstreamBuild : getUpstreamBuilds(item)) {
-                        if (!upstreamBuild.isBuilding()) {
-                            queuedIds.add(item.getId());
+                    for (Run<?, ?> upstreamRun : getUpstreamBuilds(item)) {
+                        if (!upstreamRun.isBuilding() || allowAllDownstreamItems) {
+                            queuedIds.add(queueId);
                             break;
                         }
                     }
                 }
             } else {
-                queuedIds.add(item.getId());
+                logger.log(Level.FINE, "Unknown task found in queue: {0}", item.task.toString());
+                queuedIds.add(queueId);
             }
         }
         return Collections.unmodifiableSet(queuedIds);
@@ -97,9 +116,9 @@ public final class QueueUtils {
         } else {
             Queue queueInstance = Queue.getInstance();
 
-            Node node = Jenkins.getInstance().getNode(nodeName);
+            Node node = Jenkins.get().getNode(nodeName);
             if (nodeName.isEmpty()) { // Special case when building on master
-                node = Jenkins.getInstance();
+                node = Jenkins.get();
             }
 
             if (node != null) {
@@ -121,42 +140,57 @@ public final class QueueUtils {
      * @return set of running queue ids
      */
     public static Set<Long> getRunningProjectQueueIds() {
-        Set<Long> runningProjects = new HashSet<Long>();
+        Set<Long> runningProjects = new HashSet<>();
 
-        List<Node> allNodes = new ArrayList<Node>(Jenkins.getInstance().getNodes());
-        allNodes.add(Jenkins.getInstance());
+        List<Node> allNodes = new ArrayList<>(Jenkins.get().getNodes());
+        allNodes.add(Jenkins.get());
 
         for (Node node : allNodes) {
-            runningProjects.addAll(getRunninProjectsQueueIDs(node.getNodeName()));
+            runningProjects.addAll(getRunningProjectsQueueIDs(node.getNodeName()));
         }
         return Collections.unmodifiableSet(runningProjects);
     }
 
     /**
+     * Old, misspelled method name. Use getRunningProjectsQueueIDs instead.
+     */
+    @Deprecated
+    public static Set<Long> getRunninProjectsQueueIDs(String nodeName) {
+        return getRunningProjectsQueueIDs(nodeName);
+    }
+
+    /**
      * Returns a set of queue ids of all currently running builds on a node.
+     * For pipeline builds, only the queue id of the WorkflowRun is included.
      *
      * @param nodeName the node name to list running projects for
      * @return set of queue ids
      */
-    public static Set<Long> getRunninProjectsQueueIDs(String nodeName) {
-        Set<Long> runningProjects = new HashSet<Long>();
+    public static Set<Long> getRunningProjectsQueueIDs(String nodeName) {
+        Set<Long> runningProjects = new HashSet<>();
 
-        Node node = Jenkins.getInstance().getNode(nodeName);
+        Node node = Jenkins.get().getNode(nodeName);
         if (nodeName.isEmpty()) { // Special case when building on master
-            node = Jenkins.getInstance();
+            node = Jenkins.get();
         }
 
         if (node != null) {
             Computer computer = node.toComputer();
             if (computer != null) {
-                List<Executor> executors = new ArrayList<Executor>(computer.getExecutors());
-                executors.addAll(computer.getOneOffExecutors());
+                List<Executor> executors = computer.getAllExecutors();
 
                 for (Executor executor : executors) {
                     Queue.Executable executable = executor.getCurrentExecutable();
-                    if (executable instanceof AbstractBuild) {
-                        AbstractBuild build = (AbstractBuild)executable;
-                        runningProjects.add(build.getQueueId());
+                    if (executable instanceof Run) {
+                        // Handles both AbstractBuild and WorkflowRun
+                        Run<?, ?> run = (Run<?, ?>)executable;
+                        runningProjects.add(run.getQueueId());
+                    } else if (executable != null && executable.getParent() instanceof PlaceholderTask) {
+                        // Handles PlaceholderTask
+                        Run<?, ?> run = ((PlaceholderTask) executable.getParent()).run();
+                        if (run != null) {
+                            runningProjects.add(run.getQueueId());
+                        }
                     }
                 }
             }
@@ -171,18 +205,10 @@ public final class QueueUtils {
      * @return set of upstream project names
      */
     public static Set<Long> getUpstreamQueueIds(Queue.Item item) {
-        Set<Long> upstreamProjects = new HashSet<Long>();
-        for (Cause cause : item.getCauses()) {
-            if (cause instanceof Cause.UpstreamCause) {
-                Cause.UpstreamCause upstreamCause = (Cause.UpstreamCause)cause;
-                Run<?, ?> run = upstreamCause.getUpstreamRun();
-                upstreamCause.getUpstreamProject();
-                if (run != null) {
-                    upstreamProjects.add(run.getQueueId());
-                }
-            }
-        }
-        return Collections.unmodifiableSet(upstreamProjects);
+        Set<Run<?, ?>> upstreamRuns = getUpstreamBuildsInternal(item);
+        return Collections.unmodifiableSet(
+                upstreamRuns.stream().map(Run::getQueueId).collect(Collectors.toSet())
+        );
     }
 
     /**
@@ -190,19 +216,36 @@ public final class QueueUtils {
      * @param item the queue item to find upstream builds for
      * @return set of upstream builds
      */
-    public static Set<AbstractBuild> getUpstreamBuilds(Queue.Item item) {
-        Set<AbstractBuild> upstreamBuilds = new HashSet<AbstractBuild>();
-        for (Cause cause : item.getCauses()) {
-            if (cause instanceof Cause.UpstreamCause) {
-                Cause.UpstreamCause upstreamCause = (Cause.UpstreamCause)cause;
-                Run<?, ?> upstreamRun = upstreamCause.getUpstreamRun();
+    public static Set<Run<?, ?>> getUpstreamBuilds(Queue.Item item) {
+        return Collections.unmodifiableSet(getUpstreamBuildsInternal(item));
+    }
 
-                if (upstreamRun != null && upstreamRun instanceof AbstractBuild) {
-                    upstreamBuilds.add((AbstractBuild)upstreamRun);
+    private static Set<Run<?, ?>> getUpstreamBuildsInternal(Queue.Item item) {
+        Set<Run<?, ?>> upstreamBuilds = new HashSet<>();
+        List<Cause> causes;
+        if (item.task instanceof PlaceholderTask) {
+            Run<?, ?> run = ((PlaceholderTask) item.task).run();
+            causes = run != null ? run.getCauses() : null;
+        } else {
+            causes = item.getCauses();
+        }
+
+        if (causes != null) {
+            for (Cause cause : causes) {
+                if (cause instanceof Cause.UpstreamCause) {
+                    Cause.UpstreamCause upstreamCause = (Cause.UpstreamCause) cause;
+                    Run<?, ?> upstreamRun = upstreamCause.getUpstreamRun();
+
+                    if (upstreamRun != null) {
+                        upstreamBuilds.add(upstreamRun);
+                    }
+                } else if (cause instanceof Cause.UserIdCause) {
+                    // This was *actually* started by a user! (Probably via rebuild) - Don't report any upstream runs
+                    return Collections.emptySet();
                 }
             }
         }
-        return Collections.unmodifiableSet(upstreamBuilds);
+        return upstreamBuilds;
     }
 
     /**
@@ -213,36 +256,27 @@ public final class QueueUtils {
      * @return true if any other available nodes were found, otherwise false
      */
     public static boolean canOtherNodeBuild(Queue.Item item, Node node) {
-        boolean otherNodeCanBuild = false;
-
-        if (item instanceof BuildableItem) {
-            // Item is ready to build, we can make a full check if other slaves can build it.
-            BuildableItem buildableItem = (BuildableItem)item;
-            Set<Node> allNodes = new HashSet<Node>(Jenkins.getInstance().getNodes());
-            allNodes.add(Jenkins.getInstance());
-
-            for (Node otherNode : allNodes) {
-                Computer otherComputer = otherNode.toComputer();
-                if (otherComputer != null && otherComputer.isOnline() && !otherNode.equals(node)
-                        && otherNode.canTake(buildableItem) == null) {
-                    otherNodeCanBuild = true;
-                    break;
-                }
-            }
+        if (item instanceof Queue.BuildableItem) {
+            return canOtherNodeBuild((Queue.BuildableItem)item, node);
         } else if (item instanceof Queue.WaitingItem) {
-            //Item is in quiet period. We can't make a full check if other nodes can build,
-            //instead we check if its upstream was built on the argument node and it that case
-            //return false.
-            otherNodeCanBuild = true;
-            for (AbstractBuild upstreamBuild : getUpstreamBuilds(item)) {
-                boolean isUpstreamFinished = !upstreamBuild.isBuilding();
-                if (isUpstreamFinished && upstreamBuild.getBuiltOnStr().equals(node.getNodeName())) {
-                    otherNodeCanBuild = false;
-                    break;
-                }
+            Queue.BuildableItem hypotheticalBuildable = new Queue.BuildableItem((Queue.WaitingItem)item);
+            return canOtherNodeBuild(hypotheticalBuildable, node);
+        }
+        return false;
+    }
+
+    private static boolean canOtherNodeBuild(Queue.BuildableItem item, Node node) {
+        Set<Node> allNodes = new HashSet<>(Jenkins.get().getNodes());
+        allNodes.add(Jenkins.get());
+
+        for (Node otherNode : allNodes) {
+            Computer otherComputer = otherNode.toComputer();
+            if (otherComputer != null && otherComputer.isOnline() && !otherNode.equals(node)
+                    && otherNode.canTake(item) == null) {
+                return true;
             }
         }
-        return otherNodeCanBuild;
+        return false;
     }
 
     /**
@@ -252,8 +286,7 @@ public final class QueueUtils {
      */
     public static boolean isBuilding(Computer computer) {
         boolean isBuilding = false;
-        List<Executor> executors = new ArrayList<Executor>(computer.getExecutors());
-        executors.addAll(computer.getOneOffExecutors());
+        List<Executor> executors = computer.getAllExecutors();
 
         for (Executor executor : executors) {
             if (executor.isBusy()) {
@@ -284,4 +317,4 @@ public final class QueueUtils {
         }
         return hasExclusive;
     }
- }
+}
