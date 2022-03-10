@@ -319,10 +319,15 @@ public class GlobalLenientShutdownTest {
     private void waitForProjectInQueue(FreeStyleProject project) throws InterruptedException {
         int elapsedSeconds = 0;
         while (elapsedSeconds <= TIMEOUT_SECONDS) {
-            AbstractProject firstQueued = (AbstractProject)Queue.getInstance().getItems()[0].task;
-            if (firstQueued.equals(project)) {
-                break;
+            Queue.Item[] items = Queue.getInstance().getItems();
+            if (items.length > 0)
+            {
+                AbstractProject firstQueued = (AbstractProject) items[0].task;
+                if (firstQueued.equals(project)) {
+                    break;
+                }
             }
+
             TimeUnit.SECONDS.sleep(1);
             elapsedSeconds++;
         }
